@@ -28,6 +28,7 @@ import java.util.Iterator;
 import java.util.TimerTask;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.management.InstanceAlreadyExistsException;
@@ -61,7 +62,7 @@ public abstract class BaseGenericObjectPool<T> extends BaseObject {
      * The size of the caches used to store historical data for some attributes
      * so that rolling means may be calculated.
      */
-    public static final int MEAN_TIMING_STATS_CACHE_SIZE = 100;
+    public static final int MEAN_TIMING_STATS_CACHE_SIZE = 128;
 
     private static final String EVICTION_POLICY_TYPE_NAME = EvictionPolicy.class.getName();
 
@@ -1174,7 +1175,7 @@ public abstract class BaseGenericObjectPool<T> extends BaseObject {
 
         private final AtomicLong values[];
         private final int size;
-        private int index;
+        private AtomicInteger index = new AtomicInteger(0);
 
         /**
          * Create a StatsStore with the given cache size.
@@ -1195,12 +1196,8 @@ public abstract class BaseGenericObjectPool<T> extends BaseObject {
          *
          * @param value new value to add to the cache.
          */
-        public synchronized void add(final long value) {
-            values[index].set(value);
-            index++;
-            if (index == size) {
-                index = 0;
-            }
+        public void add(final long value) {
+            values[(index.getAndIncrement()&0xffffff)%size].set(value);
         }
 
         /**
@@ -1230,7 +1227,7 @@ public abstract class BaseGenericObjectPool<T> extends BaseObject {
             builder.append(", size=");
             builder.append(size);
             builder.append(", index=");
-            builder.append(index);
+            builder.append(index.get());
             builder.append("]");
             return builder.toString();
         }
